@@ -91,7 +91,7 @@ crm-platform/
 ├── scripts/              # Operational helpers
 ├── .env.example          # Configuration template
 ├── DEPLOYMENT.md         # Deployment notes and cost options
-├── Dockerfile            # Current root container placeholder
+├── Dockerfile            # Multi-stage Node 20 image for the contacts API
 └── package.json           # Root metadata; service scripts live below
 ```
 
@@ -117,24 +117,32 @@ cp .env.example .env
 
 The current environment template is intentionally minimal. Add only the variables supported by the implementation you are running, and keep real secrets out of Git.
 
-### Backend
+### Backend (contacts API — the runnable service)
+
+This is the currently runnable backend: a hardened Express contacts API with
+API-key auth, Joi validation, and structured JSON errors. **The store is
+in-memory** (with two seeded demo contacts) — Postgres persistence is the
+documented production roadmap, not yet implemented.
 
 ```bash
 cd backend
-npm install
-npm run dev
+npm install          # or npm ci
+npm test             # boots the API and runs the smoke suite (must pass)
+npm start            # starts on PORT (default 8004)
 ```
 
-Useful service commands:
+Try it (default dev key; override with `API_KEY` in `.env`):
 
 ```bash
-npm run build
-npm start
-npm test
-npm run lint
-npm run migrate
-npm run seed
+curl localhost:8004/health
+curl -H "x-api-key: dev-demo-key-change-me" localhost:8004/contacts
+curl -H "x-api-key: dev-demo-key-change-me" -H "Content-Type: application/json" \
+  -d '{"name":"Ravi","email":"ravi@example.com","company":"Green Acres"}' \
+  localhost:8004/contacts
 ```
+
+The older docs reference `npm run build` / `migrate` / `seed` scripts — those
+belong to the planned TypeScript backend and do not exist in this manifest.
 
 ### Frontend
 
@@ -150,23 +158,43 @@ Do not copy the old README's `npm init`, `create-next-app`, or artifact-copy ste
 
 ## Configuration
 
-The committed `.env.example` currently documents:
+### Environment variables
 
-```dotenv
-API_KEY=your_api_key_here
-DATABASE_URL=your_database_url_here
+Every variable is documented in [`.env.example`](./.env.example); copy it to
+`.env` before running. Dummy values only — never commit real secrets.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `PORT` | No | `8004` | HTTP port the API listens on (Render sets this automatically) |
+| `API_KEY` | **Yes in production** | `dev-demo-key-change-me` (dev only) | Shared secret; send as `x-api-key` header on every non-public endpoint. Boot **refuses** to start when unset with `NODE_ENV=production`. Generate with `openssl rand -hex 32`. |
+| `CORS_ORIGINS` | No | *(empty — no cross-origin access)* | Comma-separated allowed browser origins, e.g. `https://app.example.com`. Never `*`; credentialed endpoints stay locked down by default. |
+| `SEED_DEMO` | No | `true` | Seeds two demo contacts on boot. Set `false` in production. |
+| `NODE_ENV` | No | `development` | `production` enables the API_KEY boot guard. |
+| `DATABASE_URL` | Roadmap | — | Postgres connection string (not yet wired in — in-memory store today) |
+| `REDIS_URL` | Roadmap | — | Redis connection string (not yet wired in) |
+| `JWT_SECRET` | Roadmap | — | JWT signing secret if user login is added later |
+
+### Authentication
+
+All non-public endpoints require the shared API key in the `x-api-key`
+header (timing-safe comparison). Public: `GET /`, `GET /health`.
+Protected: `/contacts*`, `/stats`. Missing/invalid key → `401` with a
+structured JSON error, e.g. `{"error":{"code":"UNAUTHORIZED",...}}`.
+
+### Error format
+
+All errors are structured JSON — stack traces never leave the server:
+
+```json
+{ "error": { "code": "VALIDATION_ERROR", "message": "...", "details": [...] } }
 ```
 
-A real deployment will normally require additional service-specific configuration for authentication, Redis, Kafka, email, messaging, storage, CORS, and observability. Before enabling a feature, document its exact variable names in `.env.example` and validate them at startup.
+Codes: `UNAUTHORIZED` (401), `NOT_FOUND` (404), `BAD_REQUEST` (400, e.g.
+malformed JSON), `VALIDATION_ERROR` (422), `INTERNAL_ERROR` (500).
 
-At minimum, production configuration should cover:
-
-- `DATABASE_URL` with TLS and a restricted database user
-- Strong signing keys and short-lived access/refresh-token policy
-- Redis and Kafka connection details with authentication
-- Explicit frontend origins and webhook URLs
-- Email, SMS/WhatsApp, and object-storage credentials
-- Log level, metrics endpoint, and error-reporting configuration
+The committed `.env.example` previously documented only two placeholder lines;
+it is now complete for the runnable API, with the production roadmap vars
+marked clearly.
 
 ## API surface
 
@@ -200,19 +228,34 @@ Confirm routes, authentication requirements, response schemas, and pagination be
 
 ## Deployment
 
-See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the repository's hosted-service and low-cost deployment notes. The deployment guide describes options such as managed PostgreSQL, Redis, Cloudflare-hosted frontend delivery, object storage, email, messaging, and monitoring.
+See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for hosted-service and low-cost options.
 
-A safer production rollout is:
+### Deploy the API to Render (Docker)
 
-1. Build backend and frontend artifacts in CI.
-2. Run migrations as a controlled release step.
-3. Deploy API and workers independently.
-4. Place the frontend/API behind TLS and a WAF or reverse proxy.
-5. Configure backups, restore drills, alerting, and error tracking.
-6. Verify tenant isolation and authorization with automated tests.
-7. Run a smoke test against non-production integrations before promotion.
+1. Push the repo to GitHub.
+2. In Render: **New → Web Service → Build from Dockerfile** (root `Dockerfile`
+   builds the contacts API).
+3. Set environment variables: `API_KEY` (a real secret), `SEED_DEMO=false`,
+   `NODE_ENV=production`, and `CORS_ORIGINS` with your frontend origin.
+4. Health check path: `/health`. Render assigns `PORT` automatically.
 
-The root [`Dockerfile`](./Dockerfile) currently contains a fallback placeholder rather than a complete application image. Treat Docker/Kubernetes/Terraform references as deployment direction until they are validated end to end.
+### Deploy with Docker locally
+
+```bash
+docker build -t crm-api .
+docker run -p 8004:8004 \
+  -e NODE_ENV=production \
+  -e API_KEY="$(openssl rand -hex 32)" \
+  -e SEED_DEMO=false \
+  crm-api
+curl localhost:8004/health
+```
+
+### Cloudflare
+
+The API is a single stateless container — put it behind a Cloudflare-proxied
+subdomain (e.g. `api.example.com`) for free TLS and DDoS protection; set the
+`CORS_ORIGINS` value to your frontend domain served via Cloudflare Pages.
 
 ## Production-readiness assessment
 

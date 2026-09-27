@@ -1,50 +1,23 @@
 {
-  "name": "@visionquantech/crm-backend",
-  "version": "1.0.0",
-  "description": "Enterprise CRM Backend Services",
-  "main": "src/index.js",
-  "scripts": {
-    "dev": "node src/index.js",
-    "start": "node src/index.js"
-  },
   "dependencies": {
-    "aws-sdk": "^2.1498.0",
-    "bcrypt": "^5.1.1",
-    "bull": "^4.12.0",
     "cors": "^2.8.6",
-    "date-fns": "^2.30.0",
     "dotenv": "^16.3.1",
     "express": "^4.22.3",
     "helmet": "^7.1.0",
-    "ioredis": "^5.3.2",
-    "joi": "^17.11.0",
-    "jsonwebtoken": "^9.0.2",
-    "kafkajs": "^2.2.4",
-    "nodemailer": "^6.9.7",
-    "pg": "^8.11.3",
-    "prom-client": "^15.1.0",
-    "twilio": "^4.19.0",
-    "uuid": "^9.0.1",
-    "winston": "^3.11.0"
+    "joi": "^17.11.0"
   },
-  "devDependencies": {
-    "@types/bcrypt": "^5.0.2",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/jest": "^29.5.10",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/node": "^20.10.0",
-    "@types/nodemailer": "^6.4.14",
-    "@types/uuid": "^9.0.7",
-    "@typescript-eslint/eslint-plugin": "^6.13.1",
-    "@typescript-eslint/parser": "^6.13.1",
-    "eslint": "^8.54.0",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.1.1",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.2"
-  },
+  "description": "VisionQuantech CRM contacts API (demo in-memory store; Postgres is the production roadmap)",
+  "devDependencies": {},
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "main": "src/index.js",
+  "name": "@visionquantech/crm-backend",
+  "scripts": {
+    "dev": "node src/index.js",
+    "smoke": "node scripts/smoke.js",
+    "start": "node src/index.js",
+    "test": "node scripts/smoke.js"
+  },
+  "version": "1.0.0"
 }
